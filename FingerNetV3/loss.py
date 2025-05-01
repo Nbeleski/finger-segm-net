@@ -95,7 +95,7 @@ def compute_multitask_loss(pred, target):
 def total_loss_from_dict(losses):
     return (
         5.0  * losses["seg_loss"] + # was 10.
-        500.0 * losses["mnt_s_loss"] + # was 200.
+        600.0 * losses["mnt_s_loss"] + # was 200.
         0.5   * losses["mnt_o_loss"] +
         0.5   * losses["mnt_w_loss"] +
         0.5   * losses["mnt_h_loss"]
