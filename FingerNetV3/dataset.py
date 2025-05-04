@@ -65,11 +65,12 @@ def apply_intensity_augment(img):
 
 
 class RidgeValleyDataset(Dataset):
-    def __init__(self, image_dir, template_dir, seg_dir, filenames=None, cell_size=8,
+    def __init__(self, image_dir, template_dir, seg_dir, qual_dir, filenames=None, cell_size=8,
                  n_angle_bins=180, n_offset_bins=8, augment=False):
         self.image_dir = image_dir
         self.template_dir = template_dir
         self.seg_dir = seg_dir
+        self.qual_dir = qual_dir
         self.cell_size = cell_size
         self.n_angle_bins = n_angle_bins
         self.n_offset_bins = n_offset_bins
@@ -89,6 +90,7 @@ class RidgeValleyDataset(Dataset):
         img_path = os.path.join(self.image_dir, fname)
         seg_path = os.path.join(self.seg_dir, fname)
         tmpl_path = os.path.join(self.template_dir, base + '.incits378')
+        qual_path = os.path.join(self.qual_dir, base + '.npy')
 
         # --- Load image ---
         img = cv2.imread(img_path, cv2.IMREAD_GRAYSCALE).astype(np.float32) / 255.0
@@ -98,6 +100,11 @@ class RidgeValleyDataset(Dataset):
         seg = cv2.imread(seg_path, cv2.IMREAD_GRAYSCALE)
         seg = cv2.resize(seg, (W, H), interpolation=cv2.INTER_NEAREST).astype(np.float32) / 255.0
 
+        # --- Load quality map
+        quality = np.load(qual_path) # (64, 64)
+        expanded_quality = np.repeat(np.repeat(quality, 8, axis=0), 8, axis=1)
+        expanded_quality = expanded_quality.astype(np.float32) / 5.
+
         # --- If image is too big, randomly crop it ---
         crop_size = 512
         if H > crop_size or W > crop_size:
@@ -105,6 +112,7 @@ class RidgeValleyDataset(Dataset):
             left = np.random.randint(0, max(W - crop_size + 1, 1))
             img = img[top:top+crop_size, left:left+crop_size]
             seg = seg[top:top+crop_size, left:left+crop_size]
+            expanded_quality = expanded_quality[top:top+crop_size, left:left+crop_size]
             crop_x, crop_y = left, top
         else:
             crop_x, crop_y = 0, 0  # no cropping
@@ -132,6 +140,7 @@ class RidgeValleyDataset(Dataset):
             if random.random() < 0.5:
                 img = np.fliplr(img).copy()
                 seg = np.fliplr(seg).copy()
+                expanded_quality = np.fliplr(expanded_quality).copy()
                 if len(minutiae) > 0:
                     minutiae[:, 0] = W - minutiae[:, 0] - 1
                     minutiae[:, 2] = (np.pi - minutiae[:, 2]) % (2 * np.pi)
@@ -145,7 +154,8 @@ class RidgeValleyDataset(Dataset):
 
             #FIXME: border value?
             img = cv2.warpAffine(img, rot_mat, (W, H), flags=cv2.INTER_LINEAR, borderValue=0.5)
-            seg = cv2.warpAffine(seg, rot_mat, (W, H), flags=cv2.INTER_NEAREST, borderValue=0.5)
+            seg = cv2.warpAffine(seg, rot_mat, (W, H), flags=cv2.INTER_NEAREST, borderMode=cv2.BORDER_REPLICATE) #, borderValue=1.0)
+            expanded_quality = cv2.warpAffine(expanded_quality, rot_mat, (W, H), flags=cv2.INTER_NEAREST, borderValue=0.0)
 
             if len(minutiae) > 0:
                 coords = np.stack([minutiae[:, 0], minutiae[:, 1], np.ones(len(minutiae))], axis=1)
@@ -162,6 +172,8 @@ class RidgeValleyDataset(Dataset):
 
         img = torch.from_numpy(img).unsqueeze(0)  # (1, H, W)
         seg = torch.from_numpy(seg).unsqueeze(0)  # (1, H, W)
+        quality_label = expanded_quality[::8, ::8].copy()
+        quality_label = torch.from_numpy(quality_label).unsqueeze(0)  # (1, H, W)
         H, W = img.shape[-2:]
 
         # --- Encode maps ---
@@ -183,6 +195,7 @@ class RidgeValleyDataset(Dataset):
             )
 
 
+
         # --- Masking for positive/negative in score map ---
         mnt_s_out = score_map.copy()
         seg_coarse = cv2.resize(seg.squeeze(0).numpy(), (Wc, Hc), interpolation=cv2.INTER_LINEAR)
@@ -198,4 +211,5 @@ class RidgeValleyDataset(Dataset):
             'mnt_o_out': torch.tensor(angle_map, dtype=torch.float32),
             'mnt_w_out': torch.tensor(x_offset_map, dtype=torch.float32),
             'mnt_h_out': torch.tensor(y_offset_map, dtype=torch.float32),
+            'mnt_q_out': quality_label
         }

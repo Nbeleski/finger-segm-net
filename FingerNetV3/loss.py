@@ -54,49 +54,37 @@ def focal_loss(pred, target, mask=None, alpha=0.25, gamma=2.0, eps=1e-8):
         return loss.sum() / (mask.sum() + eps)
     return loss.mean()
 
-# def compute_multitask_loss(pred, target):
-#     losses = {}
-#     losses['seg_loss']  = seg_loss(pred['segmentation'], target['seg_out'])
 
-#     valid_mask = (target['mnt_s_out'] >= 0)  # include both 0 and 1, exclude -1
-
-#     # Only compute BCE where target is not -1 (ignore regions)
-#     losses['mnt_s_loss'] = focal_loss(pred['minutiae']['mnt_s_score'], target['mnt_s_out'], mask=valid_mask)
-#     mask = (target['mnt_s_out'] > 0)  # only for orientation/offsets (positives only)
-#     losses['mnt_o_loss'] = bce_loss(pred['minutiae']['mnt_o_score'], target['mnt_o_out'], mask)
-#     losses['mnt_w_loss'] = bce_loss(pred['minutiae']['mnt_w_score'], target['mnt_w_out'], mask)
-#     losses['mnt_h_loss'] = bce_loss(pred['minutiae']['mnt_h_score'], target['mnt_h_out'], mask)
-#     return losses
 
 def compute_multitask_loss(pred, target):
     losses = {}
     losses['seg_loss']  = seg_loss(pred['segmentation'], target['seg_out'])
 
-    # 1. Valid regions (exclude -1s)
-    valid_mask = (target['mnt_s_out'] >= 0).float()  # shape (B, 1, 64, 64)
+    # --- Masks ---
+    valid_mask = (target['mnt_s_out'] >= 0).float()               # (B, 1, 64, 64)
+    # TODO: sqrt the q score
+    quality_weight = pred['minutiae']['mnt_q_score'].detach().clamp(0.0, 1.0).sqrt()
+    # quality_weight = pred['minutiae']['mnt_q_score'].detach().clamp(0.0, 1.0)   # model's own confidence
+    weighted_mask = valid_mask * quality_weight                   # final mask for mnt_s_loss
+    target_s = target['mnt_s_out'].clamp(0.0, 1.0)
 
-    # 2. Segmentation-based soft weighting
-    seg_weight = pred['segmentation'].detach()       # shape (B, 1, 64, 64)
-    seg_weight = F.interpolate(pred['segmentation'].detach(), size=target['mnt_s_out'].shape[-2:], mode='bilinear', align_corners=False)
-
-    # 3. Combined mask = valid regions * ridge confidence
-    mask_score = valid_mask.float() * seg_weight
-
-    losses['mnt_s_loss'] = focal_loss(pred['minutiae']['mnt_s_score'], target['mnt_s_out'], mask=mask_score)
-
-    # 4. For orientation and offset, use only positive samples (where target == 1)
-    mask_pos = (target['mnt_s_out'] > 0).float()
-    losses['mnt_o_loss'] = bce_loss(pred['minutiae']['mnt_o_score'], target['mnt_o_out'], mask_pos)
-    losses['mnt_w_loss'] = bce_loss(pred['minutiae']['mnt_w_score'], target['mnt_w_out'], mask_pos)
-    losses['mnt_h_loss'] = bce_loss(pred['minutiae']['mnt_h_score'], target['mnt_h_out'], mask_pos)
+    # Only compute BCE where target is not -1 (ignore regions)
+    losses['mnt_s_loss'] = focal_loss(pred['minutiae']['mnt_s_score'], target_s, mask=weighted_mask, alpha=0.25, gamma=2.0)
+    mask = (target['mnt_s_out'] > 0)  # only for orientation/offsets (positives only)
+    losses['mnt_o_loss'] = bce_loss(pred['minutiae']['mnt_o_score'], target['mnt_o_out'], mask)
+    losses['mnt_w_loss'] = bce_loss(pred['minutiae']['mnt_w_score'], target['mnt_w_out'], mask)
+    losses['mnt_h_loss'] = bce_loss(pred['minutiae']['mnt_h_score'], target['mnt_h_out'], mask)
+    losses['mnt_q_loss'] = F.mse_loss(pred['minutiae']['mnt_q_score'], target['mnt_q_out'])
 
     return losses
+
 
 def total_loss_from_dict(losses):
     return (
         5.0  * losses["seg_loss"] + # was 10.
-        600.0 * losses["mnt_s_loss"] + # was 200.
+        800.0 * losses["mnt_s_loss"] + # was 200.
         0.5   * losses["mnt_o_loss"] +
         0.5   * losses["mnt_w_loss"] +
-        0.5   * losses["mnt_h_loss"]
+        0.5   * losses["mnt_h_loss"] + 
+        1.0   * losses["mnt_q_loss"]
     )

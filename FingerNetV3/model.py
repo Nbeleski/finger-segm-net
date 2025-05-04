@@ -105,13 +105,18 @@ class MinutiaeHeads(nn.Module):
             nn.Conv2d(in_channels, n_bins_angle, 1),
             nn.Sigmoid()
         )
+        self.quality = nn.Sequential(
+            nn.Conv2d(in_channels, 1, 1),
+            nn.Sigmoid()
+        )
 
     def forward(self, x):
         return {
             "mnt_s_score": self.score(x),
             "mnt_w_score": self.x_offset(x),
             "mnt_h_score": self.y_offset(x),
-            "mnt_o_score": self.angle(x)
+            "mnt_o_score": self.angle(x),
+            "mnt_q_score": self.quality(x)
         }
 
 class MinutiaeExtractor(nn.Module):
