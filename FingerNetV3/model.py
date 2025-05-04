@@ -86,29 +86,60 @@ class MinutiaeFeatureExtractor(nn.Module):
         x = self.pool3(self.prelu3(self.bn3(self.conv3(x))))
         return x
 
+# class MinutiaeHeads(nn.Module):
+#     def __init__(self, in_channels=256, n_bins_angle=180, n_bins_offset=8):
+#         super().__init__()
+#         self.score = nn.Sequential(
+#             nn.Conv2d(in_channels, 1, 1),
+#             nn.Sigmoid()
+#         )
+#         self.x_offset = nn.Sequential(
+#             nn.Conv2d(in_channels, n_bins_offset, 1),
+#             nn.Sigmoid()
+#         )
+#         self.y_offset = nn.Sequential(
+#             nn.Conv2d(in_channels, n_bins_offset, 1),
+#             nn.Sigmoid()
+#         )
+#         self.angle = nn.Sequential(
+#             nn.Conv2d(in_channels, n_bins_angle, 1),
+#             nn.Sigmoid()
+#         )
+#         self.quality = nn.Sequential(
+#             nn.Conv2d(in_channels, 1, 1),
+#             nn.Sigmoid()
+#         )
+
+#     def forward(self, x):
+#         return {
+#             "mnt_s_score": self.score(x),
+#             "mnt_w_score": self.x_offset(x),
+#             "mnt_h_score": self.y_offset(x),
+#             "mnt_o_score": self.angle(x),
+#             "mnt_q_score": self.quality(x)
+#         }
+
+class ResidualHead(nn.Module):
+    def __init__(self, in_channels, out_channels):
+        super().__init__()
+        self.block = nn.Sequential(
+            nn.Conv2d(in_channels, in_channels, 3, padding=1),
+            nn.BatchNorm2d(in_channels),
+            nn.ReLU(inplace=True),
+            nn.Conv2d(in_channels, out_channels, 1)
+        )
+
+    def forward(self, x):
+        return self.block(x)
+
 class MinutiaeHeads(nn.Module):
     def __init__(self, in_channels=256, n_bins_angle=180, n_bins_offset=8):
         super().__init__()
-        self.score = nn.Sequential(
-            nn.Conv2d(in_channels, 1, 1),
-            nn.Sigmoid()
-        )
-        self.x_offset = nn.Sequential(
-            nn.Conv2d(in_channels, n_bins_offset, 1),
-            nn.Sigmoid()
-        )
-        self.y_offset = nn.Sequential(
-            nn.Conv2d(in_channels, n_bins_offset, 1),
-            nn.Sigmoid()
-        )
-        self.angle = nn.Sequential(
-            nn.Conv2d(in_channels, n_bins_angle, 1),
-            nn.Sigmoid()
-        )
-        self.quality = nn.Sequential(
-            nn.Conv2d(in_channels, 1, 1),
-            nn.Sigmoid()
-        )
+        self.score   = nn.Sequential(ResidualHead(in_channels, 1), nn.Sigmoid())
+        self.x_offset = nn.Sequential(ResidualHead(in_channels, n_bins_offset), nn.Sigmoid())
+        self.y_offset = nn.Sequential(ResidualHead(in_channels, n_bins_offset), nn.Sigmoid())
+        self.angle    = nn.Sequential(ResidualHead(in_channels, n_bins_angle), nn.Sigmoid())
+        self.quality  = nn.Sequential(ResidualHead(in_channels, 1), nn.Sigmoid())
 
     def forward(self, x):
         return {
