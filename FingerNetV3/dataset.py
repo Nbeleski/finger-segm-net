@@ -154,7 +154,7 @@ class RidgeValleyDataset(Dataset):
 
             #FIXME: border value?
             img = cv2.warpAffine(img, rot_mat, (W, H), flags=cv2.INTER_LINEAR, borderValue=0.5)
-            seg = cv2.warpAffine(seg, rot_mat, (W, H), flags=cv2.INTER_NEAREST, borderMode=cv2.BORDER_REPLICATE) #, borderValue=1.0)
+            seg = cv2.warpAffine(seg, rot_mat, (W, H), flags=cv2.INTER_NEAREST, borderValue=1.0)
             expanded_quality = cv2.warpAffine(expanded_quality, rot_mat, (W, H), flags=cv2.INTER_NEAREST, borderValue=0.0)
 
             if len(minutiae) > 0:
