@@ -95,7 +95,7 @@ def nms_minutiae(minutiae, dist_thresh=15):
 #
 # Quality
 #
-def overlay_quality_map(base_img, quality_map, alpha=0.5, colormap=cv2.COLORMAP_JET):
+def overlay_quality_map(base_img, quality_map, alpha=0.5, colormap=cv2.COLORMAP_INFERNO):
     """Overlay a [0,1] quality map on a grayscale base image."""
     # Ensure quality_map is (H, W) and float
     if quality_map.ndim == 3 and quality_map.shape[0] == 1:

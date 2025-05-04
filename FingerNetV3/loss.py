@@ -54,8 +54,6 @@ def focal_loss(pred, target, mask=None, alpha=0.25, gamma=2.0, eps=1e-8):
         return loss.sum() / (mask.sum() + eps)
     return loss.mean()
 
-
-
 def compute_multitask_loss(pred, target):
     losses = {}
     losses['seg_loss']  = seg_loss(pred['segmentation'], target['seg_out'])
@@ -81,10 +79,10 @@ def compute_multitask_loss(pred, target):
 
 def total_loss_from_dict(losses):
     return (
-        5.0  * losses["seg_loss"] + # was 10.
-        800.0 * losses["mnt_s_loss"] + # was 200.
-        0.5   * losses["mnt_o_loss"] +
+        10.0  * losses["seg_loss"] + # was 10.
+        1000.0 * losses["mnt_s_loss"] + # was 200.
+        0.25   * losses["mnt_o_loss"] +
         0.5   * losses["mnt_w_loss"] +
         0.5   * losses["mnt_h_loss"] + 
-        1.0   * losses["mnt_q_loss"]
+        0.8   * losses["mnt_q_loss"]
     )

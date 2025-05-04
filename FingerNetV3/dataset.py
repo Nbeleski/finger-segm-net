@@ -101,9 +101,16 @@ class RidgeValleyDataset(Dataset):
         seg = cv2.resize(seg, (W, H), interpolation=cv2.INTER_NEAREST).astype(np.float32) / 255.0
 
         # --- Load quality map
-        quality = np.load(qual_path) # (64, 64)
+        nfiq = np.load(qual_path) # (64, 64)
+        quality = np.zeros_like(nfiq, dtype=np.float32)
+        nfiq_mask = nfiq > 0
+        quality[nfiq_mask] = (6 - nfiq[nfiq_mask]) * 0.2
         expanded_quality = np.repeat(np.repeat(quality, 8, axis=0), 8, axis=1)
-        expanded_quality = expanded_quality.astype(np.float32) / 5.
+        # expanded_quality = expanded_quality.astype(np.float32) / 5.
+
+        quality = np.zeros_like(nfiq, dtype=np.float32)
+        nfiq_mask = nfiq > 0
+        quality[nfiq_mask] = (6 - nfiq[nfiq_mask]) * 0.2
 
         # --- If image is too big, randomly crop it ---
         crop_size = 512
